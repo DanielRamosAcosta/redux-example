@@ -1,66 +1,47 @@
-import { createStore, applyMiddleware } from 'redux'
+import { createStore, applyMiddleware, compose } from 'redux'
+import logger from 'redux-logger'
 
-const initialState = {
-  color: "Rojo",
-  nombre: "Juan"
-}
+import { allReducers } from "./store/allReducers";
 
-const ACTION_TYPES = {
-  CHANGE_COLOR: 'CHANGE_COLOR',
-  CHANGE_NAME: 'CHANGE_NAME'
-}
+const promiseMiddleware = store => next => action => {  
+  if (action.payload instanceof Promise) {
+    store.dispatch({
+      type: action.type + '_PENDING'
+    })
 
-function miReducer(state = initialState, action) {
-  // console.log("he recibido la acción", action.type)
-  // console.log("mi state es:", state)
-
-  switch (action.type) {
-    case ACTION_TYPES.CHANGE_COLOR: {
-      return {
-        ...state,
-        color: action.color
-      }
-    }
-    case ACTION_TYPES.CHANGE_NAME: {
-      return {
-        ...state,
-        nombre: action.name
-      }
-    }
-    default: {
-      return state
-    }
+    action.payload
+      .then(result => {
+        store.dispatch({
+          type: action.type + '_FULFILLED',
+          payload: result
+        })
+      })
+      .catch(err => {
+        store.dispatch({
+          type: action.type + '_REJECTED',
+          payload: err
+        })
+      })
+  } else {
+    next(action)
   }
 }
 
-const logger = store =>  next =>  action => {
-  console.log("prev state", store.getState())
-  console.log("action", action)
-  next(action)
-  console.log("next state", store.getState())
-  console.log("")
-}
+const middleware = [ logger, promiseMiddleware ]
+
+const composeEnhancers =
+  typeof window === 'object' &&
+  window.__REDUX_DEVTOOLS_EXTENSION_COMPOSE__ ?   
+    window.__REDUX_DEVTOOLS_EXTENSION_COMPOSE__({
+      // Specify extension’s options like name, actionsBlacklist, actionsCreators, serialize...
+    }) : compose;
+
+const enhancer = composeEnhancers(
+  applyMiddleware(...middleware),
+  // other store enhancers if any
+);
 
 export const store = createStore(
-  miReducer, 
-  window.__REDUX_DEVTOOLS_EXTENSION__ && window.__REDUX_DEVTOOLS_EXTENSION__()
+  allReducers, 
+  enhancer
 )
-
-// Action creators
-export function createActionChangeColor(color) {
-  return {
-    type: ACTION_TYPES.CHANGE_COLOR,
-    color
-  }
-}
-
-export function createActionChangeName(name) {
-  return {
-    type: ACTION_TYPES.CHANGE_NAME,
-    name
-  }
-}
-
-// store.dispatch(createActionChangeColor("Verde"))
-// store.dispatch(createActionChangeColor("Rosa"))
-// store.dispatch(createActionChangeName("Paco"))
